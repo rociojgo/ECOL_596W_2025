@@ -48,8 +48,10 @@ You also have a separate data frame called *brightness.csv* where each row lists
 
 ```{r}
 # Type your answer in this box using R code 
-swallows <- read.csv(file.choose(~swallows.csv))
-brightness_swal <- read.csv(file.choose(~brightness.csv))
+#swallows <- read.csv(file.choose(~swallows.csv))
+#brightness_swal <- read.csv(file.choose(~brightness.csv))
+swallows <- read.csv("swallows.csv")
+brightness_swal <- read.csv("brightness.csv")
 
 # Google? No
 
