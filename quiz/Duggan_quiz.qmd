@@ -50,14 +50,13 @@ library(ggplot2)
 library(dslabs)
 library(dplyr)
 
-swallows <- read.csv("quiz/swallows.csv")
-# I admittedly had some trouble with this because the swallows.csv is in the quiz directory, and I was trying to find the csv in its parent directory. So I had to add the quiz/ part since it was in the quiz folder. Normally the swallows.csv would just be in the working directory, so the code would be swallows <- read.csv("swallows.csv")
-
-brightness <- read.csv("quiz/brightness.csv")
-#same thing here
+setwd('C:/Users/DUGGA/OneDrive/Desktop/Ari/ECOL_596W_2025-ari/quiz')
+swallows <- read.csv("swallows.csv")
+brightness <- read.csv("brightness.csv")
+# I know I shouldn't set the wd in here, but RStudio could not render the html file for me if I did not set the wd in these lines.
 
 # Google? y/n
-# No, but I had to ask Logan how to get the csvs to read without changing the working directory. I know I could have just changed the working directory to the quiz folder but I found this was a helpful tip.
+# No.
 
 
 ```
@@ -68,7 +67,7 @@ You realize that you want to add brightness information onto your main swallows 
 
 ```{r}
 #Answer
-swallowsbright <- merge(swallows, brightness, by = 'nestbox')
+swalbright <- merge(swallows, brightness, by = 'nestbox')
 #To check this worked as intended, I went back to the original data frames and made sure that the brightness values in the brightness dataframe matched their brood and n_fledged values in the swallows dataframe. I did this for five birds.
 
 #Google? 
@@ -81,7 +80,7 @@ Inspect your combined data frame. Do some sort of quick sanity check on each col
 
 ```{r}
 # Answer
-swallowsbrightgood <- swallowsbright |> filter(brightness != 'NA')
+swalbrightgood <- swalbright |> filter(brightness != 'NA')
 # I just removed the row with an "NA" value for brightness. I also checked that no observation had more fledged chicks than chicks.
 
 # Google y/n 
@@ -92,7 +91,8 @@ Create a new column called prop_fledged that contains the proportion of nestling
 
 ```{r}
 #Answer
-swal2 <- swallowsbrightgood |> mutate(prop_fledged = n_fledged/brood)
+swal10 <- swalbrightgood |> mutate(prop_fledged = n_fledged/brood) |> filter(brood != 0)
+# Here I am taking out all the observations where the brood was 0 because obviously if there are no chicks there are no fledglings. Having n_fledged/brood also gives us NaN values, which mess up the graphs for the last two questions.
 
 # Google? y/n
 # No
@@ -104,7 +104,8 @@ What was the mean proportion of nestlings fledged in each treatment?
 
 ```{r}
 # Answer 
-swal2 |> group_by(treatment) |> summarize(mean = mean(prop_fledged, na.rm = T))
+swal11 <- swal10 |> group_by(treatment) |> summarize(mean = mean(prop_fledged, na.rm = T))
+# Needed to take out NAs to not mess up the mean calculation.
 
 # Google? y/n
 # Yes, just a small check of summarise syntax. Could have used help section in RStudio.
@@ -114,7 +115,7 @@ Create a plot showing fledging success differences between treatments
 
 ```{r}
 # Answer
-ggplot(swal3, aes(treatment, prop_fledged))+geom_boxplot() + labs(x = 'Treatment', y = 'Proportion Fledged', title = 'Proportion Fledged by Treatment')
+ggplot(swal10, aes(treatment, prop_fledged)) + geom_boxplot() + labs(x = 'Treatment', y = 'Proportion Fledged', title = 'Proportion Fledged by Treatment')
 # Google? y/n
 # Yes, just for labels
 
@@ -124,7 +125,7 @@ Is there any evidence that female brightness influenced fledging success? Create
 
 ```{r}
 # Answer
-ggplot(swal3, aes(brightness, prop_fledged)) + geom_point() + labs(x = 'Brightness', y = 'Proportion Fledged', title = 'Proportion Fledged by Maternal Brightness') + geom_smooth(method=lm, se=FALSE)
+ggplot(swal10, aes(brightness, prop_fledged)) + geom_point() + labs(x = 'Brightness', y = 'Proportion Fledged', title = 'Proportion Fledged by Maternal Brightness') + geom_smooth(method=lm, se=FALSE)
 #There does not seem to be any relationship between maternal brightness and fledging success. The line-of-best-fit that R gives is almost completely flat, so we can not say from this dataset that there is a relationship between female plumage brightness and fledging success.
 
 # Google? y/n
