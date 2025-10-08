@@ -101,7 +101,9 @@ summary(bright_swallows)
 bright_swallows <- bright_swallows %>% 
   filter(!brightness %in% c(NA))
 
-# Google y/n 
+dim(bright_swallows)
+
+  # Google y/n 
 #no
 ```
 
