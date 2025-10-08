@@ -33,7 +33,7 @@ Step 5. Submit a pull request. If github warns you of conflicts please try and f
 library(ggplot2)
 library(dslabs)
 library(dplyr)
-library(tidyverse)
+#library(quarto)
 ```
 
 #### Load your data:
@@ -47,18 +47,12 @@ You also have a separate data frame called *brightness.csv* where each row lists
 
 ```{r}
 # Type your answer in this box using R code 
+
 swallows <- read.csv("swallows.csv")
-
-head(swallows)
-colnames(swallows)
-#I don't think this data frame has the nest_fate column
-
 brightness <- read.csv("brightness.csv")
 
-head(brightness)
+# Google? n
 
-# Google? y/n
-#no
 
 
 ```
@@ -69,55 +63,42 @@ You realize that you want to add brightness information onto your main swallows 
 
 ```{r}
 #Answer
-bright_swallows <- left_join(swallows, brightness, by = "nestbox")
 
-#I checked this join using the function head and colnames
-head(bright_swallows)
-colnames(bright_swallows)
+swallows <- inner_join(swallows, brightness, by="nestbox")
 
+#I would check to make sure that this worked as I intended by making sure I retained the same number of rows and only added the brightness column to my main swallows dataframe.
 
 
-#Google? 
-#no
+#Google? n
+
 
 ```
 
 Inspect your combined data frame. Do some sort of quick sanity check on each column to catch any obvious entry errors. Correct as necessary
 
-bright_swallows \<- bright_swallows %\>%
-
-filter(!brightness %in% c(NA))
-
 ```{r}
 # Answer
-class(bright_swallows$brightness)
-class(bright_swallows$brood)
-class(bright_swallows$n_fledged)
 
-all(bright_swallows$treatment %in% c("Control", "Predation"))
+unique(swallows$treatment) # make sure there are only control and predation columns
 
-summary(bright_swallows)
+hist(swallows$brood) # data is a little left-skewed
 
-bright_swallows <- bright_swallows %>% 
-  filter(!brightness %in% c(NA))
+hist(swallows$n_fledged) # a lot of birds did not fledge
 
-# Google y/n 
-#no
+mean(swallows$brightness) # one NA
+mean(swallows$brightness, na.rm=T) # 51.197
+
+# Google y/n n
 ```
 
 Create a new column called prop_fledged that contains the proportion of nestlings that fledged from each nest.
 
 ```{r}
 #Answer
-bright_swallows <- bright_swallows %>%
-  mutate(prop_fledged = n_fledged/brood)
 
-head(bright_swallows)
+swallows <- mutate(swallows, prop_fledged=n_fledged/brood)
 
-class(bright_swallows$prop_fledged)
-
-# Google? y/n
-#no
+# Google? y/n n
 
 ```
 
@@ -127,20 +108,17 @@ What was the mean proportion of nestlings fledged in each treatment?
 
 ```{r}
 # Answer 
-bright_swallows %>%
-  filter(treatment == "Control") %>%
-  summarise(mean_prop_control = mean(prop_fledged, na.rm = TRUE))
 
-#the mean proportion of nestlings fledged in the control treatment is 0.7055556
+swallows %>% 
+  filter(treatment == "Predation") %>% 
+  pull(prop_fledged) %>% 
+  mean(na.rm=TRUE) #.335
 
-bright_swallows %>%
-  filter(treatment == "Predation") %>%
-  summarise(mean_prop_predation = mean(prop_fledged, na.rm = TRUE))
-
-#the mean proportion of nestlings fledged in the predation treatment is 0.3316667
-
-# Google? y/n
-#yes
+swallows %>% 
+  filter(treatment == "Control") %>% 
+  pull(prop_fledged) %>% 
+  mean(na.rm=TRUE) # .7055
+# Google? y/n y needed help with pull()
 
 ```
 
@@ -148,33 +126,47 @@ Create a plot showing fledging success differences between treatments
 
 ```{r}
 # Answer
-bright_swallows %>%
-  ggplot(aes(x=treatment,y=prop_fledged)) +
-  geom_boxplot(fill="steelblue") +
-  labs(title = "Fledging Success Across Treatments", x = "Treatmet", y = "Proportion of nestlings that fledged")
-theme_minimal() +
-  theme(axis.text.x = element_text(size=12),
-        axis.test.y = element_text(size=12),
-        plot.title = element_text(size=14), face="bold")
 
-# Google? y/n
-#no
+agg_data <- aggregate(prop_fledged ~ treatment, 
+                      data = swallows, 
+                      FUN = mean)  
+
+# Plot
+ggplot(agg_data, aes(treatment, prop_fledged, fill=c('red', 'blue'))) + 
+  geom_col(show.legend=FALSE) +
+  xlab('Treatment') +
+  ylab('Proportion of Fledging Successes') +
+  ggtitle('Proportion of Fledging Success Across Treatment Groups') +
+  theme(legend.position = "none") +
+  theme_bw()
+
+#looked at this to make sure mean props were right
+#mean.control <- swallows %>% 
+ # filter(treatment=="Control") 
+#mean(mean.control$prop_fledged, na.rm=T)
+
+#mean.predation <- swallows %>% 
+ # filter(treatment=="Predation")
+  #mean(mean.predation$prop_fledged, na.rm=T)
+
+# Google? y/n y could not remember aggregate() syntax
+
+
 ```
 
 Is there any evidence that female brightness influenced fledging success? Create a plot to visually investigate this question.
 
 ```{r}
 # Answer
-bright_swallows %>% ggplot(aes(x=brightness,y=prop_fledged)) +
-  geom_point(size = 3) +
-  labs(title = "Female Brightness Infleunce on Fledging Sucess", x = "Female Brightness", y = "Proportion of nestlings that fledged")
-theme_minimal() +
-  theme(axis.text.x = element_text(size=12),
-        axis.test.y = element_text(size=12),
-        plot.title = element_text(size=14), face="bold")
-  
-#based on the randomness of the plot, female brightness does not infleunce fledging success
 
-# Google? y/n
-#no
+ggplot(swallows, aes(brightness, prop_fledged)) + geom_point() + 
+  xlab('Female Brightness') +
+  ylab('Proportion of Fleding Success') +
+  ggtitle('Effect of Female Brightness of Fledging Success') +
+  theme_bw()
+
+# Google? y/n n
+
+# there does not appear to be any evidence that female brightness induces fledging success. the data does not show any correlation between brightness and fledging success.
+
 ```
