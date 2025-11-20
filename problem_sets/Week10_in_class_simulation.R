@@ -38,3 +38,16 @@ fish %>% select(depth_max, log_depth_max) %>% head
 
 lm(fish ~ depth_max, data = fish) %>% summary
 lm(fish ~ log_depth_max, data = fish) %>% summary
+
+
+ps <- NULL
+for( i in 1:1000) {
+a <- rnorm(20, mean = 12, sd = 3)
+b <- rnorm(20, mean = 10, sd = 3)
+test <- t.test(a,b)
+ps[i] <- test$p.value
+}
+
+hist(ps)
+
+
