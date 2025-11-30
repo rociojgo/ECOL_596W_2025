@@ -1,0 +1,288 @@
+---
+title: 'iNEXT Quickstart'
+subtitle: 'ECOL 596W'
+author: 'By Rocío Guzmán'
+date: 'Latest update: `r Sys.Date()`'
+output:
+  html_document:
+    highlight: kate
+    df_print: paged
+    toc: yes
+    toc_float:
+      collapsed: false
+---
+
+```{css, echo = FALSE}
+body {font: normal 17px Segoe UI, sans-serif !important;}
+/* headers */
+h1, h2, h3, h4 {font-weight: 600; letter-spacing: -0.015em; margin-top: 1.5em; margin-bottom: 0.5em;}
+h1, h2 {line-height: 1.2;}
+h1.title {border-bottom: 0px; margin-top: 1em; padding-bottom: 0; margin-bottom: 0;}
+h3.subtitle {font-weight: normal; margin-top: 0; padding-bottom: 1em;}
+h1 {font-size: 1.8em; padding-bottom: 0.3em; border-bottom: 1px solid #dee2e6;}
+h2 {font-size: 1.5em;}
+h3 {font-size: 1.4em; line-height: 1.3;}
+h4.author, h4.date {font-size: 18px; line-height: 1; margin-top: 0; font-weight: lighter;}
+h4.date {margin-bottom: 3em;}
+
+caption {color: #333;}
+
+/* code blocks*/
+pre.sourceCode, pre.sourceCode r {font-family: Source Code Pro !important;
+	font-size: 15px !important; 
+	background-color: #f8f8f8 !important; overflow: inherit; border: 1px solid #f5f5f5; border-radius: 6px;}
+```
+
+```{r include = F}
+library(kableExtra)
+library(tidyverse)
+```
+
+# General information
+
+The R package iNEXT (iNterpolation/EXTrapolation) focuses on Hill numbers (i.e. richness, Shannon diversity and Simpson diversity in terms of effective number of species) and provides rarefied and extrapolated estimations of diversity measures. It is especially useful for plotting these estimations and sample completeness curves.
+
+This package uses the estimators proposed by Chao et al. (2014) and is presented in Hsieh et al. 2016.
+
+# Package installation
+
+```{r eval =F}
+# from CRAN
+install.packages("iNEXT")
+
+# from github
+install.packages('devtools')
+library(devtools)
+install_github('AnneChao/iNEXT')
+```
+
+Loading necessary packages.
+
+```{r warning = FALSE, message = FALSE}
+library(iNEXT)
+library(ggplot2)
+```
+
+# Data structure
+
+iNEXT works with different types of data:
+
+1.  Abundance data (individual-based): the sampling unit is an individual.
+2.  Incidence data (sampling-unit-based): the sampling unit is what is typically considered a sampling unit depending on the study design (e.g. trap, net, quadrat, plot, timed survey). There are two types of incidence data
+    a.  Incidence raw data
+    b.  Incidence frequency data
+
+In all of these types of data, the vectors or matrices represent the assemblages (or sites) and have to be arranged in a list as follows:
+
+```{r eval = F}
+data <- list(assemblage1 = assemblage1, assemblage2 = assemblage2, 
+             assemblage3 = assemblage3) 
+# name of the object within the list = assemblage object
+```
+
+## Abundance data
+
+*Demo data from iNEXT: `data("spider")`*
+
+For this type of data, each assemblage is represented by a **vector** and the values represent **species abundances**. All assemblages are required to have the same length, and so should be filled with 0 where a species is not present.
+
+Data example:
+
+```{r echo = F}
+df1 <- data.frame("Assemblage.1" = c(250, 183, 90, 54, 21, 16, 7, 1, 1),
+                  "Assemblage.2" = c(165, 106, 76, 30, 13, 4, 1, 0, 0),
+                  "species" = c("sp.1", "sp.2", "sp.3", "sp.4", "sp.5", "sp.6", "sp.7", "sp.8", "sp.9"))
+
+knitr::kable(setNames(as.data.frame(t(df1[,-3])), df1[,3])) %>% 
+  kable_styling(full_width = FALSE, position = "left") %>% 
+  column_spec(1, bold = TRUE)
+```
+
+```{r include = F}
+data("spider")
+str(spider)
+
+# Vector of abundances for Logged site 
+spider[["Logged"]] 
+```
+
+## Incidence raw data
+
+*Demo data from iNEXT: `data("ciliates")`*
+
+In this type of data, each assemblage is represented by a **matrix**. The columns represent one **sample unit** of the assemblage and the rows represent the **presence/absence of a species** (raw species incidence).
+
+The number of sample units ("columns") can be different among assemblages, but the number of species ("rows") has to remain equal across assemblages, therefore having only absence data (0) in the rows of species not found in other assemblages.
+
+Data example:
+
+```{r echo = F}
+df2 <- data.frame("sample.1" = c(0,0,1,0,1,1),
+                  "sample.2" = c(0,0,0,1,1,1),
+                  "sample.3" = c(1,0,0,1,0,0),
+                  row.names = c("sp.1", "sp.2", "sp.3", "sp.4", "sp5", "sp.6"))
+
+df3 <- data.frame("sample.1" = c(0,1,0,0,0,0),
+                  "sample.2" = c(1,0,1,0,0,1),
+                  "sample.3" = c(1,0,0,0,0,0),
+                  "sample.4" = c(1,1,1,0,0,1),
+                  row.names = c("sp.1", "sp.2", "sp.3", "sp.4", "sp.5", "sp.6"))
+
+knitr::kable(df2, caption = "Assemblage 1") %>% 
+  kable_styling(full_width = FALSE, position = "float_left") %>% 
+  column_spec(1, bold = TRUE)
+
+knitr::kable(df3, caption = "Assemblage 2") %>% 
+  kable_styling(full_width = FALSE, position = "left") %>% 
+  column_spec(1, bold = TRUE)
+```
+
+```{r include = F}
+data("ciliates")
+str(ciliates)
+
+# First species of matrix for EtoshaPan site
+EtoshaPan <- as.data.frame(ciliates[["EtoshaPan"]]) 
+head(EtoshaPan)
+```
+
+## Incidence frequency data
+
+*Demo data from iNEXT: `data("ant")`*
+
+In this type of data, each assemblage is represented by a **vector**. The first value represents the **number of sampling units**, and the remaining values represent **species abundances**. Similar to abundance data, all assemblages are required to have the same length, and so should be filled with 0 where a species is not present.
+
+Data example:
+
+```{r echo = F}
+df1 <- data.frame("Assemblage.1" = c(450, 250, 183, 90, 54, 21, 16, 7, 1, 1),
+                  "Assemblage.2" = c(280, 165, 106, 76, 30, 13, 4, 1, 0, 0),
+                  "var" = c("sampling.units", "sp.1", "sp.2", "sp.3", "sp.4", "sp.5", "sp.6", "sp.7", "sp.8", "sp.9"))
+
+knitr::kable(setNames(as.data.frame(t(df1[,-3])), df1[,3])) %>% 
+  kable_styling(full_width = FALSE, position = "left") %>% 
+  column_spec(1, bold = TRUE) 
+```
+
+```{r include = F}
+data("ant")
+str(ant)
+
+# Vector of raw frequencies for h2000m site
+# The first value (200) is the number of sample units, 
+# the remaining values are species abundances
+ant[["h2000m"]] 
+```
+
+# Main functions
+
+```{r eval = F}
+iNEXT()
+
+ggiNEXT()
+```
+
+## iNEXT()
+
+This is the main function of the package and it estimates diversity of order $q$, in which:
+
+-   $q = 0$ estimates richness
+
+-   $q = 1$ estimates Shannon diversity
+
+-   $q = 2$ estimates Simpson diversity.
+
+The most basic usage for this function only needs the data (`x`), the q value or values (`q`) and the type of data used (`datatype`).
+
+```{r eval = FALSE}
+iNEXT(x, q, datatype)
+```
+
+The output of this function is a list of several data frames that report the following:
+
+1.  Data summary (i.e. number of sampling units, total incidence, number of species, sample coverage, etc).
+2.  Size-based and coverage-based rarefaction and extrapolation of selected diversity measure (`q`). This is what the next function will use for plotting.
+3.  Observed and estimated measures of diversity per assemblage.
+
+## ggiNEXT()
+
+This function plots the rarefication/extrapolation curves using the output of the function `iNEXT()`. It needs the package `ggplot2` to be loaded alongside it.
+
+The most basic usage for this function only needs the output of the function `iNEXT()` (`x`) and the type of plot (`type`).
+
+```{r eval = F}
+ggiNEXT(x, type)
+```
+
+There are 3 types of plots:
+
+-   `type = 1`: rarefied diversity estimates (solid line) as a function of sample size and extrapolated (dashed line) up to double the reference sample size if not specified
+-   `type = 2`: sample completeness (coverage) for the same range of sites as in 1
+-   `type = 3`: diversity estimates as a function of sample coverage
+
+## Usage example
+
+Using the `ciliates` demo data for raw incidence estimating richness (`q = 0`).
+
+```{r}
+data("ciliates")
+
+output <- iNEXT(ciliates, q = 0, datatype = "incidence_raw")
+summary(output)
+```
+
+Plotting rarefied/extrapolated richness:
+
+```{r warning = FALSE}
+ggiNEXT(output, type = 1)
+```
+
+Plotting sample completeness:
+
+```{r}
+ggiNEXT(output, type = 2)
+```
+
+## Plot customizations
+
+`ggiNEXT()` allows some customization as part of the function. For example, a plot of richness and Shannon diversity (`q = c(0, 1)`) with no confidence intervals (`se = F`), where the assemblages are separated (`facet.var = "Assemblage"`):
+
+```{r}
+output2 <- iNEXT(ciliates, q = c(0, 1), datatype = "incidence_raw")
+ggiNEXT(output2, type = 1, se = FALSE, facet.var = "Assemblage")
+```
+
+Or the same plot but instead of faceting by assemblage, it's faceted by diversity measure (`facet.var = "Order.q"`), and each assemblage has its own color (`color.var = "Assemblage"`):
+
+```{r}
+ggiNEXT(output2, type = 1, facet.var = "Order.q", color.var = "Assemblage")
+```
+
+It is also possible to customize these plots using `ggplot` functions (some not compatible).
+
+```{r message = FALSE}
+ggiNEXT(output, type = 1) +
+  # circles instead of different shapes by assemblage
+  scale_shape_manual(values = c(19, 19, 19)) + 
+  # change labels 
+  labs(y = "Richness") +
+  # adding custom colors by assemblage
+  scale_colour_manual(values = c("CentralNamibDesert" = "#3B0F70", 
+                                 "EtoshaPan" = "#8C2981",
+                                 "SouthernNamibDesert" = "#DE4968")) +
+  scale_fill_manual(values = c("CentralNamibDesert" = "#3B0F70", 
+                                 "EtoshaPan" = "#8C2981",
+                                 "SouthernNamibDesert" = "#DE4968")) +
+  # black&white theme, font size 18
+  theme_bw(base_size = 18) + 
+  # legend to the right
+  theme(legend.position = "right")
+```
+
+# References
+
+Chao, A., Gotelli, N.J., Hsieh, T.C., Sander, E.L., Ma, K.H., Colwell, R.K. & Ellison, A.M. (2014) Rarefaction and extrapolation with Hill numbers: a framework for sampling and estimation in species diversity studies. *Ecological Monographs*, 84: 45–67. <https://doi.org/10.1890/13-0133.1>
+
+Hsieh, T.C., Ma, K.H. & Chao, A. (2016) iNEXT: An R package for interpolation and extrapolation of species diversity (Hill numbers). *Methods in Ecology and Evolution*, 7: 1451-1456. <https://doi.org/10.1111/2041-210X.12613>
+
+Chao, A., Ma, K. H., and Hsieh, T. C. (2016) iNEXT Online: Software for Interpolation and Extrapolation of Species Diversity. Program and User’s Guide published at <https://chao.shinyapps.io/iNEXTOnline/>
