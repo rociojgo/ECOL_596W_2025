@@ -1,0 +1,203 @@
+---
+title: 'Package Presentation: Phyloseq'
+author: "Mariana Acevedo Garcia"
+date: "2025-11-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction to Phyloseq\  
+Phyloseq uses many tools available in R for ecology, phylogenetics, and graphing such as vegan, ade4, ape, picante, and ggplot2 to analyze and visually explore  phylogenetic sequencing data that has been organized into Operational Taxonomic Units (OTUs). It is especially useful when accompanying  sample metadata, a  phylogenetic tree and/or taxonomic classifications of the OTUs are available.\
+
+I am particularly interested in using phyloseq for its microbiome plot functions and ability to  merge data based on OTU or sample variables. They also have thorough analysis and graphing tutorials using published data to make learning the package more approachable.\
+
+Most information I am presenting comes from Dr. Paul J. McMurdie and Dr. Nicholas Ollberding, to learn more in depth about phyloseq check out their websites:\
+- <https://www.nicholas-ollberding.com/post/introduction-to-phyloseq/>\ 
+- <https://joey711.github.io/phyloseq/index.html>    
+
+## Installing Phyloseq & Loading Packages\
+There are a few ways to install phyloseq, this is what worked for my computer:
+
+```
+source("http://bioconductor.org/biocLite.R")
+biocLite('phyloseq')
+source("https://raw.githubusercontent.com/joey711/phyloseq/master/inst/scripts/installer.R", local = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+library(ggplot2)
+library("phyloseq")
+library("ape")
+library("plyr")
+library("Biostrings")
+library(tidyverse)
+theme_set(theme_bw())
+```
+
+# Example Workflows\
+## Santa Rita Experimental Range Data\
+To begin learning phyloseq, which I plan to use for analyzing  my data in the future, I made graphs using different datasets.\
+
+First, I used data from the Santa Rita Experimental Range (SRER), a NEON agricultural research station near Tucson, Arizona. The site supports the collection of diverse environmental data to advance research on desert ecosystems. For this analysis, I used 2024 soil metadata, which includes sequencing data from numerous soil samples.
+
+**Load Data**\
+
+```{r message=FALSE, warning=FALSE}
+summary<-readRDS("C:/Users/marac/Downloads/summary-of-dada2-2.RDS")
+ASVTable<-readRDS("C:/Users/marac/Downloads/seqtab_final-2.RDS")
+Taxa<-readRDS("C:/Users/marac/Downloads/taxa-2.RDS")
+
+meta <- read.csv("C:/Users/marac/Downloads/mmg_metadata_16SrRNA_QCd_20240222-2.csv")
+```
+```{r, include=FALSE}
+# data filtering steps
+RemoveDuplicates <- meta%>%filter(rawDataFileDescription=="Per sample R1 fastq sequences" | rawDataFileDescription=="Ri archive of fastq files")
+Altered.RawRowname <- RemoveDuplicates%>%mutate(rawDataFileName = str_replace(rawDataFileName, "_R1.fastq.gz",""))
+Meta<-as.data.frame(Altered.RawRowname)
+rownames(Meta)<-Meta$`rawDataFileName`
+```
+
+**Introduce Data to Phyloseq**\
+
+After filtering the metadata, I loaded it into phyloseq\
+
+```{r}
+#Build a phyloseq object (ps) by assembling all your ASV counts, metadata, and taxonomy 
+ps <- phyloseq(otu_table(ASVTable, taxa_are_rows=FALSE),
+               sample_data(Meta),
+               tax_table(Taxa))
+
+#Convert ASV sequences into DNA sequence objects
+#Give each DNA sequence the same name as its ASV, so they will merge correctly 
+dna <- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) <- taxa_names(ps)
+
+#Merge the DNA sequences into the existing phyloseq object 
+ps <- merge_phyloseq(ps,dna)
+
+#Replace long DNA sequence names with ASV labels 
+taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+```
+
+**Familiarize Yourself with the Data**\
+
+These functions are helpful to get to know your data\
+
+```{r}
+ntaxa(ps)
+
+nsamples(ps)
+
+sample_names(ps)[1:5]
+
+rank_names(ps)
+
+sample_variables(ps)[1:5]
+
+otu_table(ps)[1:5,1:4]
+
+tax_table(ps)[1:5,1:4]
+```
+
+**Plot Alpha Diversity**\
+
+Alpha diversity measures the variation of species in an ecosystem or sample. Shannon index gives an idea of the overall community structure by considering species abundance and evenness. Simpson index emphasizes dominant species, so it is useful for comparing different communities. 
+
+```{r, warning = FALSE, message=FALSE}
+#Convert counts to relative abundance 
+ps_relative = transform_sample_counts(ps, function(x) x / sum(x))
+
+#Remove very rare ASVs, keep only those whose average relative abundance across samples is greater than 0.001%
+ps_filtered = filter_taxa(ps_relative, function(x) mean(x) > 1e-5, TRUE)
+
+#Create a richness plot showing Shannon and Simpson diversity by plot ID
+plot_richness(ps_filtered, x="plotID", measures=c("Shannon", "Simpson"))
+```
+
+## GlobalPatterns Data\
+The GlobalPatterns dataset is included in phyloseq. It includes microbial community sequencing data from 25 environmental samples and three known "mock commuities."\
+
+I used this dataset and a tutorial from Dr. Paul J. McMurdie to learn how to plot ordination and perform a Principal Coordinate Analysis (PCA).\
+
+**Load & Familiarize Yourself with GlobalPatterns**\
+```{r, warning = FALSE, message=FALSE}
+data("GlobalPatterns")
+GP = GlobalPatterns
+
+?GlobalPatterns
+
+ntaxa(GlobalPatterns)
+nsamples(GlobalPatterns) 
+sample_names(GlobalPatterns)
+rank_names(GlobalPatterns) 
+sample_variables(GlobalPatterns)
+otu_table(GlobalPatterns)[1:5,1:5]
+tax_table(GlobalPatterns)[1:5,1:4] 
+phy_tree(GlobalPatterns)
+```
+
+**Filter Data**\
+
+These filtering steps were done to create a clear, straightforward graph. But, Dr. McMurdie warns against filtering data without biological reasons, so these steps may not apply to all datasets.\
+
+```{r, warning = FALSE, message=FALSE}
+#Filtering data to only keep taxa that have more than 5 reads in at least 50% of samples, removes rare taxa
+wh0 = genefilter_sample(GP, filterfun_sample(function(x) x > 5),
+                       A = 0.5*nsamples(GP)) 
+
+#Prune the phyloseq object to keep only the filtered taxa from the previous line of code 
+GP1 = prune_taxa(wh0, GP)
+
+#Normalize sequencing data by converting counts to counts per million
+GP1 = transform_sample_counts(GP1, function(x) 1E6 * x/sum(x))
+
+#Create a vector with total abundance for each phylum 
+phylum.sum = tapply(taxa_sums(GP1), tax_table(GP1)[, "Phylum"], sum, na.rm = TRUE)
+
+#Identify and keep the 5 most abundant phyla
+top5phyla = names(sort(phylum.sum, TRUE))[1:5]
+GP1 = prune_taxa((tax_table(GP1)[, "Phylum"] %in% top5phyla), GP1)
+
+```
+
+**Plot Ordination**\
+```{r, message=FALSE, warning=FALSE}
+#Define a human associated versus non-human categorical variable 
+human = get_variable(GP1, "SampleType") %in% c("Feces", "Mock", "Skin", "Tongue")
+sample_data(GP1)$human <- factor(human)
+
+#Compute an NMDS ordination using Bray-Curtis distances - creates an ordination to visualize how similar or different taxa are based on their abundances 
+#Plot taxa and color by phylum
+GP.ord <- ordinate(GP1,"NMDS","bray", trymax = 20, trace = FALSE)
+p1 = plot_ordination(GP1, GP.ord, type = "taxa", color = "Phylum", title = "taxa")
+print(p1)
+
+#Create faceted plots by phylum - creates separate panels for each phylum
+p1 + facet_wrap(~Phylum,3)
+```
+
+**Perform Ordination Using PCoA**\
+```{r, warning = FALSE, message=FALSE}
+#Run a Principal Coordinates Analysis (PCaA) using UniFrac distance, a phylogeny-aware metric
+ordu = ordinate(GP1, "PCoA", "unifrac", weighted = TRUE)
+
+#Create an ordination plot using the PCoA results 
+#Points will be colored based on sample type and shaped based on whether they are human associated
+p = plot_ordination(GP1, ordu, color = "SampleType", shape = "human")
+
+#Make the graph look nicer with ggplot2 layers
+p = p + geom_point(size = 4, alpha = 0.75)
+p = p + scale_colour_brewer(type = "qual", palette = "Set1")
+p + ggtitle("MDS/PCoA on Weighted-UniFrac Distance")
+```
+
+# Concluding Thoughts\
+The graphs in this short tutorial are only a few of the graphs that can be made using phyloseq. A few others that may be useful are\
+
+- Abundance bar graph (plot_bar)
+- Phylogenetic trees (plot_tree)
+- Heatmaps (plot_heatmap)
+- Microbiome network (plot_network)
