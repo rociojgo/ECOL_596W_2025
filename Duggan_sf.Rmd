@@ -1,0 +1,122 @@
+---
+title: "Duggan_sf"
+author: "AriDuggan"
+date: "2025-12-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+The Simple Features (sf) package is commonly used for storage and organization of spatial information of real-world entities. The package is used in conjunction with others like dplyr, ggplot, and rnaturalearth to overlay spatial data onto maps.
+
+The feature in simple features is any particular thing that can exist in space (e.g. a chair, a lizard, a volcano). Features can also be made up of smaller features, like groups of chairs or volcanic island chains. 
+
+An important property of every feature when using the sf package is that they have two main qualities: attributes and geometry. Attributes are any sort of descriptive property a thing can have, like an infection status or a color. The geometry of a feature is a special kind of attribute that the sf package pays particular attention to. This geometry is the physical description of the feature's location in space. This geometry is what allows packages like ggplot to overlay features onto a map.
+
+A feature's geometry can be represented in 2-, 3-, or 4-D space (the 4th dimension consists of a non-xyz attribute like time, and it is typically called the M value). In this space, geometries are plotted. These geometries include simple shapes like points, linestrings, or polygons, as well as more complex ones like multicurves or triangulated irregular networks, known as TINs. Any time one wishes to map these geometries onto a real map, they must use a real-life coordinate reference system, or CRS. One very common CRS is WGS84, or the World Geodetic System 1984, a 2-D visualization of the Earth given in lat/long degrees. Other CRSs may be more useful for a particular area, but I will only be using the WGS84 CRS.
+
+It is important to understand the structure of an sf object. As stated before, sf object characters are separated into general attributes and a particular geometry. The geometry column is called the sfc, or the simple features list-column. Within this column, each geometry for a particular feature within the sf object is called the sfg, or simple feature geometry, of that feature. This terminology is important for both a basic understanding of the mechanism by which sf stores spatial information in a larger data frame and is relevant to more in-depth usages of the sf package not covered here.
+
+Some important functions within the sf package are as follow: st_read() turns geospatial data acquired from a compatible format into an sf dataframe. st_write() does the opposite of st_read(), converting an sf dataframe into a format friendly to other mapping software like GIS. st_geometry() is used to find the geometry of each feature in an sf dataframe. It is important to keep geometries compatible within a dataframe if one is to plot it as plotting packages have difficulties plotting multiple types of geometries at once. st_crs() and st_transform() are important in managing the coordinate system for a particular feature. Like the geometries, it is important to keep the coordinate system used across all features in an sf dataframe consistent. 
+
+For an example of how sf can be used in answering biological questions, I will use my project on whiptail lizards and their malaria-causing parasites. Apicomplexan parasites in the genus Plasmodium infect a wide variety of vertebrate hosts. Some species have evolved to infect lizards of the genus Aspidoscelis. This genus of lizards exhibits the greatest diversity of unisexual species of any vertebrate genus, likely due to high rates of interbreeding between closely related species that form species composed of hybrid, unisexual females. Differential prevalence of malarial parasites may indicate fitness tradeoffs associated with sexuality. This study system, because of its diversity of unisexual and sexual hosts, acts as an ideal group to study hypotheses associated with parasitism and its driving of evolution.
+
+With the sf package, I can visually display the ranges of these lizards and compare prevalence patterns across environmental factors. Unfortunately, the only data I have been able to find thus far is simple range data from the US Geological Service. Using the sf and ggplot packages to map this data is nevertheless a valuable first step in determining possible trends across spatial contexts. 
+
+As I do not currently have prevalence data for the lizard species I am studying, I will simply make up the data. Do note that I plan to use much of the same code to model these populations and their parasite prevalences when I have finally acquired my data.
+
+To begin using the sf package, we first need to call all necessary R packages. Then we will read in spatial data from an outside source. Calling the st_read() function for three different lizard species (A. gularis, A. uniparens, and A. arizonae) gives us sf dataframes with spatial data from each of these species ranges in the United States.
+
+```{r}
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(sf)
+library(dplyr)
+library(ggplot2)
+
+uniparensrange <- st_read('rDGWHx_CONUS_Range_2001v1')
+arzrange <- st_read('rASWHx_CONUS_Range_2001v1')
+gulrange <- st_read('rCSPWx_CONUS_Range_2001v1')
+```
+
+If we want to combine these dataframes to plot them, we first need them to each have species attributes.
+
+```{r}
+uniparensrange$species <- "uniparens"
+arzrange$species <- "arizonae"
+gulrange$species <- "gularis"
+```
+
+We now have spatial data for each species. We want to make sure they all have compatible geometries. When we use st_geom() on each, we notice the uniparensrange df has a geometry of POLYGON, while the other two have a MULTIPOLYGON geometry. These geometries are likely compatible, but we want to make sure there will be no errors in our code later. I will therefore make the uniparens geometry match others using the st_cast function.
+
+```{r} 
+st_geometry(uniparensrange)
+uniparensrange <- st_cast(uniparensrange, "MULTIPOLYGON")
+
+```
+
+Now we want all the sf dataframes to use the same CRS. We will choose the WGS84 CRS.
+
+```{r}
+uniparensrange <- st_transform(uniparensrange, 4326)
+arzrange <- st_transform(arzrange, 4326)
+gulrange <- st_transform(gulrange, 4326)
+
+```
+
+We can now combine the dataframes. We will use rbind().
+
+```{r}
+threeliz <- rbind(uniparensrange, arzrange, gulrange)
+
+```
+
+We can also add prevalence data to each species. Recall these numbers are randomly chosen and do not reflect real-life differences in malaria prevalence.
+
+```{r}
+prevalencedat <- data.frame(species = c("uniparens", "arizonae", "gularis"), prevalence = c(0.2, 0.3, 0.5))
+threeliz <- threeliz |> left_join(prevalencedat, by = "species")
+
+```
+
+Our sf dataframe "threeliz" is finally ready to be plotted. But to plot this sf over a map of the US, we first need another sf dataframe of the United States. The ne_states() function calls sf class data from various countries around the world. 
+
+```{r}
+background <- ne_states(country = "United States of America", returnclass = "sf")
+
+```
+
+Now for our ggplot command. To plot just the ranges on top of the background, we use the following code:
+
+```{r}
+ggplot() +
+  geom_sf(data = background, fill = "lightgray", color = "black") +
+  geom_sf(data = threeliz, aes(fill = species), color = "black", alpha = 0.5) +
+  scale_fill_manual(values = c("arizonae" = "green", "gularis" = "orange", "uniparens" = "brown")) +
+  coord_sf(xlim = c(-120, -90), ylim = c(25,37)) +
+  theme_minimal() +
+  labs(title = "Aspidoscelis Ranges",  fill = "Species")
+
+
+```
+
+
+For a plot of the prevalences over the states, we use the following:
+
+```{r}
+ggplot() +
+  geom_sf(data = background, fill = "lightgray", color = "black") +
+  geom_sf(data = threeliz, aes(fill = prevalence), color = "black", alpha = 0.5) +
+  coord_sf(xlim = c(-120, -90), ylim = c(25,37)) +
+  theme_minimal() +
+  scale_fill_gradient(low = "blue", high = "red", name = "Prevalence") +
+  labs(title = "Prevalence across Aspidoscelis Ranges")
+
+```
+
+Deeper explanations of the arguments in the sf package are provided in the Help section of RStudio and in the several associated Vignettes.
+
