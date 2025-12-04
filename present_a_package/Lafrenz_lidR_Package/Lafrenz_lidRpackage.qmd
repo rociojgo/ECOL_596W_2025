@@ -1,0 +1,116 @@
+---
+title: "Lafrenz_lidRpackage"
+author: "Sierra Lafrenz"
+format: html
+---
+
+"Quick Start" Guide: lidR Package
+
+This file uses a .las that's quite large at 151 mb.
+[Download point cloud (.las)](https://drive.google.com/file/d/1zkczOPfG9eqVkbtna7UApXZkRHC4BCJy/view?usp=sharing)
+
+1. Initial Data and Sanity Checks:
+
+Install and load the lidR package.
+Load your data using readLAS and a corresponding .las or .laz file.
+I'll be using an example .las file from my GIS analysis.
+```{r}
+library(lidR)
+#choose file
+example_las = readLAS("bigelow_point_cloud.las")
+```
+This function converts the .las file into a usable form for R. It loses some of the original capabilities of the .las/.laz format because these files store a lot of data, but for most simple analyses R's format is sufficient.
+
+Taking the summary of our 'las' object gives us the metadata of the lidar point cloud. 
+```{r}
+summary(example_las)
+#tells us:
+#projection and datum - which lets us know which globe model projection is being used for the gps location data
+#total area and the density of points within that area that make up the point cloud - this is useful to know when considering the spatial resolution of the sensors results
+```
+
+We can check the data to ensure the LAS file didn't have any duplicate points by accident:
+```{r}
+las_check(example_las)
+```
+Because there are duplicate points found, we use the filter_duplicates() function in the lidR package to remove them.
+```{r}
+#eliminate the duplicates found
+example_las <- filter_duplicates(example_las)
+#recheck the las file to ensure the problem was resolved
+las_check(example_las)
+```
+
+2. Plotting the point cloud:
+
+In the lidR package, we can just use the plot() function on our 'las' pointcloud to visualize it. We can also specify how to color the point cloud if our .las file contains that attribute info.
+```{r}
+#visualize the raw point cloud
+#automatically color coded based on the height of the points
+plot(example_las)
+#plot the point cloud with the assigned corresponding RBG value for each pixel
+#color codes the points based on their true color
+plot(example_las, color = "RGB")
+```
+
+3. Classification:
+
+We need to define the difference between ground and non-ground points in the point cloud:
+
+We will use the base function classify_ground().
+We will use a cloth simulation function ie:csf() as the method for ground classification, which essentially flips the point cloud, and "drapes" a cloth over the inverted surface with defined rigidity. This gives the general shape of the ground and also defines how far above this determined surface still counts as ground points. Depending on the terrain, like smooth vs rocky, you can change the attributes (class_threshold, cloth_resolution, and rigidness) to have a higher or lower allowance in order to not exclude features of the terrain. For example, rigidness indicates how mich the cloth conforms to the shape of the ground points, while the threshold defines how far above the cloth's sruface still counts as ground.
+```{r}
+#set cloth parameters
+las_classified <- classify_ground(example_las, algorithm = csf(class_threshold = 1, cloth_resolution = 0.5,rigidness = 2))
+#plot redefined pointcloud
+plot(las_classified, color = "Classification")
+```
+
+We can then separate the classification into ground and canopy points using filter_poi() to filter the points by their classification value. Bare ground is labeled as 2 in LAS classification code, while a value of 0 is assigned to unclassified values - like buildings or vegetation.
+```{r}
+#separate point cloud
+las_ground_points <- filter_poi(las_classified, Classification == 2)
+plot(las_ground_points, color = "RGB")
+las_canopy_points <- filter_poi(las_classified, Classification == 0)
+plot(las_canopy_points, color = "RGB")
+```
+
+4. Terrain Models:
+
+Now that we have separate ground point classifications, we can create a digital terrain model. This model only shows the ground elevation values, without the vegetation. 
+
+This specific example uses an algorithm based on invert distance weighing ie: knnidk() which interpolates values based on a system which weighs the contribution of closer neighbor's higher. k is how many points are sampled and p is a parameter that sets how weighted closer points are compared to those further away. Though you can also use a triangular irregular network ie: tin() or a kriging ie:kriging() as algorithms within these functions as well.
+```{r}
+#DTM raster
+example1_DTM = rasterize_terrain(las_ground_points, algorithm = knnidw(k = 10, p = 2))
+plot_dtm3d(example1_DTM, bg = "white") 
+
+#DTM flat grid
+example2_DTM = grid_terrain(las_ground_points, res = 0.1, algorithm = knnidw(k = 10, p = 2))
+plot(example2_DTM, xlab = "X", ylab = "Y", main = "Example_DTM")
+```
+
+5. Vegetation Analysis
+
+We can normalize the heights of our vegetation compared to the surrounding ground using normalize_height().This converts the elevation data to just height data by subtracting the terrain elevation from the canopy points.
+```{r}
+#normalize the heights of the canopy compared to DTM
+nlas <- normalize_height(las_canopy_points, example2_DTM)
+plot(nlas)
+```
+
+We can also create a raster of a digital surface model. A digital surface model takes into account the vegetation as well as the terrain. p2r() is the algorithm and stands for point to raster, so it transforms the point cloud data into a raster. The height.colors() function defines how many discrete colors are in the gradient.
+```{r}
+#DSM
+example_chm <- rasterize_canopy(example_las, res = 1, algorithm = p2r())
+col <- height.colors(25)
+plot(example_chm, col = col, xlab = "X", ylab = "Y", main = "Example_DSM")
+```
+
+We can also use functions to identify and mark individual trees using the locate_trees() function in the package. This function needs a defined circular area to search for the relative highest points as indicated by the window size ie: ws = "". Here the search area has a 3m radius.
+```{r}
+#tree identification over DSM
+ttops <- locate_trees(example_las, lmf(ws = 6))
+plot(example_chm, col = height.colors(25), xlab = "X", ylab = "Y", main = "Tree Locations")
+plot(sf::st_geometry(ttops), add = TRUE, pch = 16)
+```
