@@ -1,0 +1,252 @@
+---
+title: "Nash_vegan"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+# Vegan is a R package designed for community ecologists
+# Vegan's has most basic functions of community ordination,
+# diversity analysis, and dissimilarity analysis.
+#
+# Link to vignette:
+# https://vegandevs.r-universe.dev/vegan/doc/intro-vegan.pdf
+
+
+
+# ------Install & Run Vegan and other packages------
+install.packages("vegan", repos = "https://vegandevs.github.io/vegan/")
+install.packages("ape", repos = "https://github.com/emmanuelparadis/ape")
+
+library(ape)
+library(vegan)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+
+# ------Data sets------
+data(package = "vegan")
+
+# we will be working with Vegetation and Environment in Dutch
+# Dune Meadows.
+
+data("dune")
+str(dune)
+
+
+
+
+# --------ordination--------
+# Ordination, also referred to as gradient analysis, is a
+# multivariate analysis that is typically used to explore data.
+# In ordination space, points that are similar to each other
+# share similar traits. Ordination is used to analyze sets of
+# multivariate objects, which are common in community ecology,
+# systems biology, and genetics.
+
+### Detrended correspondence analysis (DCA) ###
+# DCA is used to find the main factors in data sets that
+# are species rich but that may have sparse data matrices
+
+ord_dca <- decorana(dune)
+decorana (veg = dune)
+# decorana is the command for detrended correspondence analysis
+scores(ord_dca)
+# shows the actual ordination results
+
+plot(ord_dca, type = "n") |>
+  points("sites", cex = 0.8, pch=21, col="red", bg="yellow") |>
+  text("species", cex=0.7, col="blue")
+# plots the results from the DCA
+
+### Non-metric multidimensional scaling (NMDS) ###
+# Non-metric multidimensional scaling uses a distance to show the
+# similarity or dissimilarity in the groups.
+
+
+ord <- metaMDS(dune, trace = FALSE)
+# metaMDS is the command for non-metric multi dimensional analysis
+ord # get results
+
+plot(ord, type = "n") |>
+  points("sites", cex = 0.8, pch=21, col="red", bg="yellow") |>
+  text("species", cex=0.7, col="blue")
+# plots the results from the NMDS
+
+# ----------graphics------------
+
+# we have graphed the results of two ordination methods (DCA and NMDS)
+# Points can be selected for an labeled differently with various functions
+# the vegan package
+
+data(dune.env) #load a different built in data set
+attach(dune.env)
+plot(ord, disp="sites", type="n") # base plot
+ordihull(ord, Management, col=1:4, lwd=3) # draws color coordinated convex hulls
+ordiellipse(ord, Management, col=1:4, kind = "ehull", lwd=3) # draws color coordinated ellipsoid hulls with standard deviation
+ordiellipse(ord, Management, col=1:4, draw="polygon") #fills in actual data
+ordispider(ord, Management, col=1:4, label = TRUE) #combines the cross sections of the ellipses principal axes
+points(ord, disp="sites", pch=21, col="red", bg="yellow", cex=1.3) #marks the ends of the cross sections
+
+# ----------Fitting environmental variables-------------
+# vegan has two functions for fitting env. variables
+# envfit for vectors of continuous variables and centroids of levels of class variables
+# ordisurf for smooth surfaces of continuous variables and isotropic spline surfaces
+
+ord.fit <- envfit(ord ~ A1 + Management, data=dune.env, perm=999)
+ord.fit
+
+# Envfit can asses the significance of the variables with a permutation test
+
+plot(ord, dis="site")
+plot(ord.fit, bg = "yellow")
+
+# plot results
+
+ordisurf(ord, A1, add=TRUE)
+# adds fitted surface onto the ordination, returns the results of the fitted gam
+
+# -------------Constrained Ordination-------------
+# constrained ordination as defined by Ramette 2007 "In constrained
+# (canonical) ordination analyses, only the variation in the species
+# table that can be explained by the environmental variables is displayed
+# and analyzed, and not all the variation in the species table.”
+# it is not reccomended by the authors of the package to add in all
+# environmental variables, the result could be similar to unconstrained ordination
+
+# I do not fully understand the difference between constrained and unconstrained
+# ordination methods.
+
+ord <- cca(dune ~ A1 + Management, data=dune.env) #canonical correspondence analysis
+ord
+
+plot(ord, spe.par = list(optimize = TRUE), sit.par = list(type="p"))
+# plotted results of the canonical correspondence analyses
+
+# Vegan includes a test for the significance of the constraints that mimics
+# a standard anova test
+
+anova(ord)
+# R automatically chooses the correct anova variant
+
+# Vegan allows us to partial out the effects of constraints
+ord <- cca(dune ~ A1 + Management + Condition(Moisture), data=dune.env)
+ord
+
+# This can influence the significance, in the following anova the effect of
+# moisture is removed
+anova(ord, by="term")
+
+# this concludes the introduction vignette into Vegan, I will now look at a few of the other
+# common functions
+
+# ------------Ecological Diversity-------------
+data(BCI)
+
+# Diversity Indicies
+
+#shannon diversity index
+H <- diversity(BCI)
+H
+# Finds the diversity indicies for all sites in the data set
+
+#Pielou's evenness
+J <- H/log(specnumber(BCI))
+J
+# specnumber is funciton in vegan to find the number of species
+
+# Fisher log-series as a diversity index
+alpha <- fisher.alpha(BCI)
+alpha
+
+
+# -----------Vegan Package------------------
+### Example 1: Unconstrained ordination
+## NMDS
+data(varespec)
+data(varechem)
+ord <- metaMDS(varespec)
+plot(ord, type = "t")
+## Fit environmental variables
+ef <- envfit(ord, varechem)
+ef
+plot(ef, p.max = 0.05)
+### Example 2: Constrained ordination (RDA)
+## The example uses formula interface to define the model
+data(dune)
+data(dune.env)
+## No constraints: PCA
+mod0 <- rda(dune ~ 1, dune.env)
+mod0
+plot(mod0)
+
+
+## All environmental variables: Full model
+mod1 <- rda(dune ~ ., dune.env)
+mod1
+plot(mod1)
+## Automatic selection of variables by permutation P-values
+mod <- ordistep(mod0, scope=formula(mod1))
+mod
+plot(mod)
+## Permutation test for all variables
+anova(mod)
+## Permutation test of "type III" effects, or significance when a term
+## is added to the model after all other terms
+anova(mod, by = "margin")
+## Plot only sample plots, use different symbols and draw SD ellipses
+## for Managemenet classes
+plot(mod, display = "sites", type = "n")
+with(dune.env, points(mod, disp = "si", pch = as.numeric(Management)))
+with(dune.env, legend("topleft", levels(Management), pch = 1:4,
+                      title = "Management"))
+with(dune.env, ordiellipse(mod, Management, label = TRUE))
+## add fitted surface of diversity to the model
+ordisurf(mod, diversity(dune), add = TRUE)
+### Example 3: analysis of dissimilarites a.k.a. non-parametric
+### permutational anova
+adonis2(dune ~ ., dune.env)
+adonis2(dune ~ Management + Moisture, dune.env)
+
+
+# More for PCA
+# help from https://rpubs.com/brouwern/veganpca
+data("iris")
+my.rda <- rda(iris[,-5])
+biplot(my.rda,
+       display = c("sites",
+                   "species"),
+       type = c("text",
+                "points"))
+#Add hulls
+ordihull(my.rda,
+         group = iris$Species,
+         col = c(1,2,3))
+
+
+#Add legend
+spp.names <- levels(iris$Species)
+legend("topright",
+       col = c(1,2,3),
+       lty = 1,
+       legend = spp.names)
+
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
